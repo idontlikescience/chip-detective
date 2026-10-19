@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>晶片檢測站．老師控制台</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔍</text></svg>">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<style>
+  /* 投影專用：固定深色，教室開燈也看得清楚 */
+  :root{
+    --ground:#140e22; --panel:#211733; --panel2:#2b1f41; --line:rgba(255,255,255,.12);
+    --text:#f6f1ea; --muted:rgba(246,241,234,.62);
+    --accent:#ffb35c; --hot:#ff8a5c; --green:#6fdca0; --red:#ff4d5e;
+    --gold:#ffd166; --silver:#cfd6e4; --bronze:#e0a06e;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:radial-gradient(120% 90% at 50% -10%,#3a2752 0%,var(--ground) 62%);
+    color:var(--text);font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+    display:flex;flex-direction:column;overflow:hidden;padding:0 clamp(16px,2.4vw,40px);
+  }
+  button{font:inherit;cursor:pointer}
+  button:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+  [hidden]{display:none!important}
+
+  .top{display:flex;align-items:center;gap:clamp(10px,1.6vw,24px);padding-block:14px;flex-wrap:wrap}
+  .brand{font-weight:900;font-size:clamp(18px,1.9vw,26px);letter-spacing:.05em;margin-right:auto}
+  .brand span{font-weight:400;color:var(--muted);font-size:.7em;margin-left:10px;letter-spacing:.1em}
+  .pill{display:flex;align-items:baseline;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 18px;font-size:clamp(14px,1.3vw,18px);color:var(--muted)}
+  .pill b{color:var(--text);font-size:1.5em;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:.06em}
+  .pill.code b{color:var(--accent)}
+
+  main{flex:1;min-height:0;display:flex;flex-direction:column;padding-bottom:18px}
+  .view{flex:1;min-height:0}
+
+  .bigbtn{border:0;border-radius:999px;background:var(--accent);color:#1c1526;font-weight:900;font-size:clamp(18px,1.8vw,26px);padding:14px 38px;min-height:56px;box-shadow:0 10px 30px rgba(255,179,92,.25)}
+  .bigbtn:hover{filter:brightness(1.06)}
+  .bigbtn:disabled{opacity:.4;box-shadow:none;cursor:default}
+  .ghost{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:999px;padding:10px 22px;font-size:clamp(14px,1.2vw,17px);min-height:44px}
+  .ghost:hover{color:var(--accent);border-color:var(--accent)}
+  .ghost.on{color:#1c1526;background:var(--accent);border-color:var(--accent)}
+
+  /* ── 等待區 ── */
+  #vLobby{display:flex;justify-content:center;align-items:center;gap:clamp(20px,3vw,56px)}
+  #vLobby{--qr:min(calc(100vh - 110px), 50vw)}
+  .joincard{flex:none;width:var(--qr);height:var(--qr);background:#fff;border-radius:22px;padding:clamp(6px,.8vw,12px)}
+  .qr svg{width:100%;height:100%;display:block}
+  .joincard .qr{width:100%;height:100%}
+  .lobbyside{flex:0 1 640px;min-width:0;height:var(--qr);display:flex;flex-direction:column}
+  .how{margin:0;font-size:clamp(20px,2.1vw,34px);font-weight:900;line-height:1.3}
+  .bigcode{margin:clamp(6px,1.4vh,18px) 0 0;color:var(--muted);font-size:clamp(15px,1.4vw,20px)}
+  .bigcode b{display:block;color:var(--accent);font-size:clamp(72px,9vw,160px);font-weight:900;letter-spacing:.12em;line-height:1;font-variant-numeric:tabular-nums;margin-top:4px}
+  .url{margin:clamp(6px,1.2vh,14px) 0 0;color:var(--muted);font-size:clamp(13px,1.1vw,16px);line-height:1.6;word-break:break-all}
+  .url b{color:var(--text)}
+  .roster{flex:1;min-height:0;display:flex;flex-direction:column;margin-top:clamp(10px,2vh,24px);border-top:1px solid var(--line);padding-top:clamp(10px,1.6vh,18px)}
+  .roster h2{margin:0 0 10px;font-size:clamp(20px,2vw,30px)}
+  .roster h2 b{color:var(--accent);font-variant-numeric:tabular-nums}
+  .names{flex:1;min-height:0;overflow:auto;display:flex;flex-wrap:wrap;align-content:flex-start;gap:8px;padding:2px}
+  .nm{border:0;background:var(--panel2);color:var(--text);border-radius:14px;padding:8px 18px;font-size:clamp(18px,1.8vw,28px);font-weight:900;animation:pop .45s cubic-bezier(.3,1.5,.5,1)}
+  .nm:hover{background:#4a2f3a;text-decoration:line-through}
+  .empty{color:var(--muted);font-size:18px;margin:4px 0}
+  .foot{display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap}
+  .foot .tip{color:var(--muted);font-size:13px;margin:0 auto 0 0}
+  .secs{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:15px}
+  .secs button{min-height:40px;padding:6px 14px}
+  @keyframes pop{0%{transform:scale(.4);opacity:0}100%{transform:none;opacity:1}}
+
+  /* ── 進行中 ── */
+  #vPlay{display:grid;grid-template-columns:minmax(0,1fr) clamp(220px,22vw,320px);gap:clamp(14px,2vw,28px);min-height:0}
+  .board{display:flex;flex-direction:column;gap:8px;min-height:0;overflow:hidden}
+  .row{display:grid;grid-template-columns:54px minmax(0,1fr) 110px 120px;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--line);border-radius:14px;height:52px;padding-right:16px;flex:none}
+  .row .rk{height:100%;display:grid;place-items:center;border-radius:13px 0 0 13px;background:rgba(255,255,255,.06);font-weight:900;font-size:24px}
+  .row.r1 .rk{background:var(--gold);color:#3a2a00}.row.r2 .rk{background:var(--silver);color:#2a2f38}.row.r3 .rk{background:var(--bronze);color:#3a2210}
+  .row .who{font-weight:900;font-size:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row .fd{text-align:right;color:var(--muted);font-size:17px}
+  .row .pts{text-align:right;font-weight:900;font-size:26px;font-variant-numeric:tabular-nums}
+  .others{display:flex;flex-wrap:wrap;gap:8px}
+  .others span{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:5px 12px;font-size:17px;color:var(--muted)}
+  .others span b{color:var(--text);margin:0 6px}
+  .side{display:flex;flex-direction:column;gap:16px}
+  .clockbox{background:var(--panel);border:1px solid var(--line);border-radius:22px;text-align:center;padding:16px}
+  .clockbox p{margin:0;color:var(--muted);font-size:18px}
+  .clockbox b{display:block;font-size:clamp(80px,9vw,140px);font-weight:900;line-height:1.05;color:var(--accent);font-variant-numeric:tabular-nums}
+  .clockbox.low b{color:var(--red)}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:14px 18px;font-size:18px;color:var(--muted)}
+  .stat b{color:var(--text);font-size:1.6em;font-variant-numeric:tabular-nums}
+  .minijoin{background:#fff;color:#1c1526;border-radius:18px;padding:10px;text-align:center;margin-top:auto}
+  .minijoin .qr{width:min(100%,180px);aspect-ratio:1;margin:auto}
+  .minijoin p{margin:4px 0 0;font-size:15px}
+
+  /* ── 頒獎台 ── */
+  #vEnd{display:flex;flex-direction:column;min-height:0}
+  #vEnd h2{text-align:center;margin:0 0 4px;font-size:clamp(28px,3.4vw,52px);letter-spacing:.06em}
+  .podium{flex:1;min-height:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(10px,1.6vw,24px);align-items:end;max-width:960px;width:100%;margin:0 auto;padding-top:10px}
+  .pcol{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;opacity:0;transform:translateY(40px);animation:rise .8s cubic-bezier(.2,1.2,.4,1) forwards}
+  .pcol .pname{font-weight:900;font-size:clamp(28px,3.4vw,56px);margin-bottom:8px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pcol .medal{font-size:clamp(42px,5vw,80px);line-height:1}
+  .pcol .block{width:100%;border-radius:18px 18px 0 0;display:flex;flex-direction:column;align-items:center;padding-top:clamp(12px,2vh,24px);font-weight:900}
+  .pcol .ps{font-size:clamp(36px,4vw,68px);line-height:1.1;font-variant-numeric:tabular-nums}
+  .pcol .pf{font-size:clamp(15px,1.5vw,22px);font-weight:400;opacity:.8}
+  .p1 .block{height:60%;min-height:150px;background:linear-gradient(180deg,var(--gold),#e6a83c);color:#3a2a00}
+  .p2 .block{height:45%;min-height:125px;background:linear-gradient(180deg,var(--silver),#9aa6ba);color:#2a2f38}
+  .p3 .block{height:33%;min-height:105px;background:linear-gradient(180deg,var(--bronze),#b8733f);color:#3a2210}
+  .pcol.none .block{background:rgba(255,255,255,.06);color:var(--muted)}
+  @keyframes rise{to{opacity:1;transform:none}}
+  .restlist{list-style:none;margin:14px auto 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;max-width:1400px;width:100%;max-height:20vh;overflow:auto}
+  .restlist li{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 14px;display:flex;gap:12px;font-size:clamp(17px,1.5vw,22px);font-weight:700;white-space:nowrap}
+  .restlist .n{color:var(--muted);min-width:2em}
+  .restlist .s{margin-left:auto}
+  .actions{display:flex;justify-content:center;gap:12px;margin-top:14px;flex-wrap:wrap}
+
+  /* ── 公布答案 ── */
+  #vReveal{display:grid;grid-template-columns:minmax(0,1fr) clamp(240px,22vw,330px);gap:clamp(14px,1.8vw,24px);min-height:0}
+  .stagebox{position:relative;min-height:0;display:flex;align-items:center;justify-content:center}
+  .stage{position:relative;flex:none;border-radius:12px;overflow:hidden;background:#000;box-shadow:0 10px 40px rgba(0,0,0,.45)}
+  .stage img.base{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .stage svg{position:absolute;inset:0;width:100%;height:100%}
+  .stage .zoomer{position:absolute;inset:0;transition:transform 1.6s cubic-bezier(.5,0,.2,1)}
+  .stage .closeup{position:absolute;inset:0;opacity:0;transition:opacity .9s;pointer-events:none}
+  .stage .closeup.show{opacity:1}
+  .tag{position:absolute;left:14px;top:12px;padding:6px 18px;border-radius:999px;background:rgba(20,14,34,.85);font-weight:900;font-size:clamp(20px,2vw,30px)}
+  .dot{opacity:.75}
+  .dot.pre{fill:var(--accent)}
+  .dot.hit{fill:var(--green)}
+  .dot.miss{fill:#fff;opacity:.45}
+  .ansring{fill:none;stroke:var(--red);stroke-width:6;animation:draw .6s ease-out}
+  @keyframes draw{0%{opacity:0;transform-box:fill-box;transform-origin:center;transform:scale(1.6)}100%{opacity:1;transform:none}}
+  .pct{font-weight:900;font-size:22px;fill:#fff;stroke:#140e22;stroke-width:4px;paint-order:stroke;text-anchor:middle}
+  .rside{display:flex;flex-direction:column;gap:12px;min-height:0;overflow:auto}
+  .rside h2{margin:0;font-size:clamp(26px,2.6vw,40px)}
+  .rside .stat b.big{font-size:2.2em;color:var(--accent)}
+  .rside .stat small{display:block;margin-top:4px;font-size:14px}
+  .rside .btns{display:flex;flex-direction:column;gap:10px;margin-top:auto}
+  .rside .btns .bigbtn{width:100%;padding:12px 18px;font-size:clamp(17px,1.5vw,22px)}
+  .rside .navs{display:flex;gap:10px}
+  .rside .navs button{flex:1}
+  .keyhint{color:var(--muted);font-size:12.5px;margin:0;text-align:center}
+
+  /* ── 全班報告 ── */
+  #vReport{display:flex;flex-direction:column;min-height:0}
+  #vReport h2{margin:0;font-size:clamp(28px,3vw,46px)}
+  #vReport .q{margin:6px 0 16px;color:var(--accent);font-size:clamp(20px,2vw,30px);font-weight:900}
+  .rep{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:10px 22px;align-items:center;font-size:clamp(17px,1.6vw,24px)}
+  .rep .h{color:var(--muted);font-size:.8em}
+  .rep .c{font-weight:900;white-space:nowrap}
+  .rep .barw{height:clamp(22px,3vh,34px);background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden;position:relative}
+  .rep .barw i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--hot));width:0;transition:width 1s cubic-bezier(.25,.9,.3,1)}
+  .rep .barw span{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-weight:900;font-size:.85em}
+  .good{font-weight:900;font-size:56px;fill:var(--green);stroke:#140e22;stroke-width:8px;paint-order:stroke;text-anchor:middle;dominant-baseline:middle;animation:draw .6s ease-out}
+  .rep .goodrow{color:var(--green);font-weight:700}
+  .rep .num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+  .rep .num small{color:var(--muted);font-weight:400}
+  .totals{display:flex;gap:16px;margin-top:20px;flex-wrap:wrap}
+  .totals .stat{flex:1;min-width:220px}
+
+  @media (max-width:900px){ body{overflow:auto} #vLobby,#vPlay,#vReveal{display:flex;flex-direction:column} }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">晶片檢測站<span>老師控制台</span></div>
+  <div class="pill code" id="pillCode" hidden>房間 <b id="roomCode">----</b></div>
+  <div class="pill" id="pillCount" hidden>人數 <b id="count">0</b></div>
+</header>
+
+<main>
+  <div class="notice view" id="vBoot"><p class="empty" style="text-align:center;margin-top:20vh">開房間中…</p></div>
+
+  <!-- 等待區 -->
+  <section class="view" id="vLobby" hidden>
+    <div class="joincard"><div class="qr" id="qrBig"></div></div>
+    <div class="lobbyside">
+      <p class="how">平板掃 QR code，輸入名字加入</p>
+      <p class="bigcode">房間代碼<b id="bigCode">----</b></p>
+      <p class="url" id="joinUrl"></p>
+      <div class="roster">
+        <h2>已加入 <b id="joinedN">0</b> 人</h2>
+        <div class="names" id="names"></div>
+        <div class="foot">
+          <p class="tip">點名字可以把他移出房間</p>
+          <div class="secs">時間
+            <button class="ghost" data-s="30">30 秒</button><button class="ghost" data-s="50">50 秒</button><button class="ghost" data-s="60">60 秒</button><button class="ghost" data-s="90">90 秒</button>
+          </div>
+          <button class="bigbtn" id="btnStart" disabled>開始</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 進行中 -->
+  <section class="view" id="vPlay" hidden>
+    <div class="board" id="board"></div>
+    <div class="side">
+      <div class="clockbox" id="clockBox"><p>剩下</p><b id="clock">50</b><p>秒</p></div>
+      <div class="stat">全班已經找到 <b id="classFound">0</b> 個瑕疵</div>
+      <button class="ghost" id="btnStop">提前結束</button>
+      <div class="minijoin"><div class="qr" id="qrSmall"></div><p>還沒加入？房間 <b id="smallCode"></b></p></div>
+    </div>
+  </section>
+
+  <!-- 頒獎台 -->
+  <section class="view" id="vEnd" hidden>
+    <h2>時間到！</h2>
+    <div class="podium" id="podium"></div>
+    <ol class="restlist" id="rest"></ol>
+    <div class="actions">
+      <button class="bigbtn" id="btnReveal">逐張公布答案 →</button>
+      <button class="ghost" id="btnAgain">同一批人再玩一次</button>
+      <button class="ghost" id="btnNew">開新房間</button>
+    </div>
+  </section>
+
+  <!-- 公布答案 -->
+  <section class="view" id="vReveal" hidden>
+    <div class="stagebox" id="stageBox">
+      <div class="stage" id="stage">
+        <div class="zoomer" id="zoomer">
+          <img class="base" id="hdImg" alt="">
+          <svg id="layer" preserveAspectRatio="none"></svg>
+        </div>
+        <div class="closeup" id="closeup">
+          <img class="base" id="zoomImg" alt="">
+          <svg id="zoomLayer" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+    </div>
+    <div class="rside">
+      <h2 id="rTitle">第 1 張</h2>
+      <div class="stat" id="rTaps"></div>
+      <div class="stat" id="rAns" hidden></div>
+      <div class="btns">
+        <button class="ghost" id="btnDots">顯示大家點在哪裡</button>
+        <button class="bigbtn" id="btnAns">公布答案</button>
+        <button class="bigbtn" id="btnZoom" hidden>放大看看</button>
+        <div class="navs"><button class="ghost" id="btnPrev">‹ 上一張</button><button class="ghost" id="btnNext">下一張 ›</button></div>
+        <p class="keyhint">鍵盤：空白鍵＝下一步、← → 換張（簡報筆也可以用）</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 全班報告 -->
+  <section class="view" id="vReport" hidden>
+    <h2>全班檢測報告</h2>
+    <p class="q">剛剛檢查的時候，遇到什麼困難？</p>
+    <div class="rep" id="rep"></div>
+    <div class="totals" id="totals"></div>
+    <div class="actions">
+      <button class="ghost" id="btnBack">‹ 回到第 6 張</button>
+      <button class="ghost" id="btnPodium">看排行榜</button>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import { CHIPS, TOTAL_DEFECTS, DEFAULT_SECONDS, defectCircle } from "./data.js";
+import * as net from "./net.js";
+
+const $ = id => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, text) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; }
+function esc(t) { return String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+let room = null;      // { code, key }
+let meta = null, players = {};
+let full = null;      // 含點擊紀錄的全班資料（公布答案用）
+let view = "boot";
+let seconds = DEFAULT_SECONDS;
+let stopWatch = null;
+
+function show(v) {
+  view = v;
+  ["Boot", "Lobby", "Play", "End", "Reveal", "Report"].forEach(n => $("v" + n).hidden = ("v" + n) !== "v" + v[0].toUpperCase() + v.slice(1));
+  if (v === "reveal") requestAnimationFrame(fitStage);
+}
+
+// ── 開房間 ──
+async function openRoom(forceNew = false) {
+  show("boot");
+  if (stopWatch) stopWatch();
+  let saved = null;
+  if (!forceNew) { try { saved = JSON.parse(localStorage.getItem("ci-teacher") || "null"); } catch (e) {} }
+  if (saved) {
+    try { await net.fetchRoom(saved.code, saved.key); room = saved; }
+    catch (e) { room = null; }
+  }
+  if (!room || forceNew) {
+    const r = await net.createRoom(seconds);
+    room = { code: r.code, key: r.key };
+    try { localStorage.setItem("ci-teacher", JSON.stringify(room)); } catch (e) {}
+  }
+  $("roomCode").textContent = $("bigCode").textContent = $("smallCode").textContent = room.code;
+  $("pillCode").hidden = $("pillCount").hidden = false;
+
+  let base = location.origin + location.pathname.replace(/[^/]*$/, "");
+  try { const i = await net.info(); if (i.lan) base = i.lan + location.pathname.replace(/[^/]*$/, ""); } catch (e) {}
+  const url = base + "index.html?room=" + room.code;
+  $("joinUrl").innerHTML = `或在瀏覽器輸入 <b>${esc(url)}</b>` +
+    (/127\.0\.0\.1|localhost/.test(url) ? `<br>（這是本機網址，平板連不到；要讓平板加入，請用 <b>python3 server.py --lan</b> 啟動）` : "");
+  drawQR($("qrBig"), url); drawQR($("qrSmall"), url);
+
+  lastState = null;
+  stopWatch = net.watchRoom(room.code, room.key, onRoom, () => openRoom(true));
+}
+
+function drawQR(box, text) {
+  const q = qrcode(0, "M"); q.addData(text); q.make();
+  box.innerHTML = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+}
+
+// ── 收到房間狀態 ──
+let lastState = null, ending = false;
+function onRoom(r) {
+  meta = r.meta; players = r.players || {};
+  const list = Object.entries(players);
+  $("count").textContent = list.length;
+  if (meta.state !== lastState) {
+    const prev = lastState;
+    lastState = meta.state;
+    if (meta.state === "lobby") { show("lobby"); seconds = meta.seconds; markSecs(); }
+    else if (meta.state === "playing") show("play");
+    else if (meta.state === "ended") {
+      show("end");
+      $("podium").innerHTML = $("rest").innerHTML = "";
+      // 等最後一筆成績送到再排名（學生端時間到會再送一次）
+      setTimeout(async () => { await loadFull(); if (view === "end") showPodium(); }, prev === "playing" ? 1500 : 0);
+    }
+  }
+  if (view === "lobby") renderLobby(list);
+  if (view === "play") renderPlay(list);
+}
+
+function renderLobby(list) {
+  $("joinedN").textContent = list.length;
+  $("btnStart").disabled = !list.length;
+  const box = $("names");
+  if (!list.length) { box.innerHTML = `<p class="empty">還沒有人加入</p>`; return; }
+  const have = new Set([...box.querySelectorAll(".nm")].map(b => b.dataset.uid));
+  const want = new Set(list.map(([u]) => u));
+  box.querySelectorAll(".empty").forEach(e => e.remove());
+  box.querySelectorAll(".nm").forEach(b => { if (!want.has(b.dataset.uid)) b.remove(); });
+  for (const [uid, p] of list) {
+    if (have.has(uid)) continue;
+    const b = document.createElement("button");
+    b.className = "nm"; b.dataset.uid = uid; b.textContent = p.name; b.title = "移出房間";
+    b.onclick = () => { if (confirm(`把「${p.name}」移出房間？`)) net.kick(room.code, room.key, uid); };
+    box.appendChild(b);
+  }
+}
+
+function markSecs() { document.querySelectorAll(".secs button").forEach(b => b.classList.toggle("on", +b.dataset.s === seconds)); $("clock").textContent = seconds; }
+document.querySelectorAll(".secs button").forEach(b => b.onclick = () => { seconds = +b.dataset.s; markSecs(); });
+
+$("btnStart").onclick = async () => {
+  $("btnStart").disabled = true;
+  ending = false;
+  await net.setState(room.code, room.key, "playing", { seconds });
+};
+
+// ── 進行中 ──
+const ranked = list => list.map(([uid, p]) => ({ uid, ...p })).sort((a, b) => b.score - a.score || b.found - a.found || (a.t || 0) - (b.t || 0));
+
+function renderPlay(list) {
+  const left = Math.max(0, Math.ceil((meta.endsAt - net.serverNow()) / 1000));
+  $("clock").textContent = left;
+  $("clockBox").classList.toggle("low", left <= 10);
+  $("classFound").textContent = list.reduce((n, [, p]) => n + (p.found || 0), 0);
+  const rk = ranked(list), top = rk.slice(0, 9);
+  $("board").innerHTML = top.map((p, i) => `<div class="row ${i < 3 ? "r" + (i + 1) : ""}">
+      <span class="rk">${i + 1}</span><span class="who">${esc(p.name)}</span>
+      <span class="fd">找到 ${p.found || 0} 個</span><span class="pts">${p.score || 0}</span></div>`).join("")
+    + (rk.length > 9 ? `<div class="others">${rk.slice(9).map((p, i) => `<span>${i + 10}<b>${esc(p.name)}</b>${p.score || 0}</span>`).join("")}</div>` : "")
+    + (rk.length ? "" : `<p class="empty">還沒有人加入</p>`);
+}
+setInterval(() => {
+  if (view !== "play" || !meta) return;
+  const left = Math.max(0, Math.ceil((meta.endsAt - net.serverNow()) / 1000));
+  $("clock").textContent = left;
+  $("clockBox").classList.toggle("low", left <= 10);
+  if (left <= 0 && !ending) { ending = true; net.setState(room.code, room.key, "ended"); }
+}, 200);
+$("btnStop").onclick = () => { if (confirm("現在就結束這一局？")) { ending = true; net.setState(room.code, room.key, "ended"); } };
+
+// ── 頒獎台 ──
+async function loadFull() { full = await net.fetchRoom(room.code, room.key, true); }
+function showPodium() {
+  const rk = ranked(Object.entries(full ? full.players : players));
+  const slot = (p, cls, medal) => p
+    ? `<div class="pcol ${cls}"><div class="pname">${esc(p.name)}</div><div class="medal">${medal}</div><div class="block"><span class="ps">${p.score}</span><span class="pf">找到 ${p.found} 個</span></div></div>`
+    : `<div class="pcol ${cls} none"><div class="block"><span class="pf">—</span></div></div>`;
+  $("podium").innerHTML = slot(rk[1], "p2", "🥈") + slot(rk[0], "p1", "🥇") + slot(rk[2], "p3", "🥉");
+  [...$("podium").children].forEach((c, i) => c.style.animationDelay = [0.5, 1.1, 0][i] + "s");
+  $("rest").innerHTML = rk.slice(3).map((p, i) => `<li><span class="n">${i + 4}</span><span>${esc(p.name)}</span><span class="s">${p.score}</span></li>`).join("");
+}
+$("btnReveal").onclick = async () => { await loadFull(); openChip(0); };
+$("btnAgain").onclick = () => { if (confirm("清掉這一局的成績，同一批人再玩一次？")) net.setState(room.code, room.key, "lobby", { seconds }); };
+$("btnNew").onclick = () => { if (confirm("開一個新房間？學生要重新掃 QR code。")) openRoom(true); };
+
+// ── 公布答案 ──
+let rc = 0, dotsOn = false, ansOn = false, zoomStep = 0; // zoomStep：0 原圖、1 放大到瑕疵、2 換成特寫圖
+const played = () => Object.values(full ? full.players : {}).filter(p => p.t > 0);
+
+function fitStage() {
+  const box = $("stageBox").getBoundingClientRect(), ar = CHIPS[rc].w / CHIPS[rc].h;
+  const w = Math.min(box.width, box.height * ar);
+  $("stage").style.width = w + "px"; $("stage").style.height = w / ar + "px";
+}
+addEventListener("resize", () => { if (view === "reveal") fitStage(); });
+
+function openChip(i) {
+  rc = i; dotsOn = false; ansOn = false; zoomStep = 0;
+  show("reveal");
+  $("hdImg").src = `img/chip${i + 1}.png`;
+  $("rTitle").textContent = `第 ${i + 1} 張`;
+  $("btnPrev").disabled = i === 0;
+  $("btnNext").textContent = i === CHIPS.length - 1 ? "全班報告 ›" : "下一張 ›";
+  const ps = played(), taps = ps.reduce((n, p) => n + p.chips[i].taps.length, 0);
+  const viewers = ps.filter(p => p.chips[i].seen >= 1000).length;
+  $("rTaps").innerHTML = `全班 <b>${viewers}</b> 人看過這張<br>一共點了 <b>${taps}</b> 下`;
+  drawLayer();
+}
+
+function drawLayer() {
+  const svg = $("layer"), { w, h, defects } = CHIPS[rc];
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  svg.innerHTML = "";
+  const ps = played();
+  const zooming = zoomStep > 0; // 放大時只留紅圈，點和數字會跟著放大蓋住畫面
+  if (dotsOn && !zooming) for (const p of ps) for (const [x, y, d] of p.chips[rc].taps) {
+    svg.appendChild(el("circle", { class: "dot " + (ansOn ? (d >= 0 ? "hit" : "miss") : "pre"), cx: x, cy: y, r: 5 }));
+  }
+  $("rAns").hidden = !ansOn;
+  if (ansOn && !defects.length) {
+    // 好的晶片：沒有瑕疵，點了都算點錯
+    const wrongPeople = ps.filter(p => p.chips[rc].taps.length).length;
+    svg.appendChild(el("text", { class: "good", x: w / 2, y: h / 2 }, "好的晶片"));
+    $("rAns").innerHTML = `這張<b class="big">沒有</b>瑕疵<br>是好的晶片！<small>有 ${wrongPeople} 人在這張點了，把好的當成壞的</small>`;
+  } else if (ansOn) {
+    const n = ps.length || 1;
+    let sum = 0;
+    defects.forEach((segs, d) => {
+      const { cx, cy, rx, ry, rot } = defectCircle(segs);
+      const got = ps.filter(p => p.chips[rc].hits.includes(d)).length;
+      sum += got;
+      const g = el("g", { transform: `rotate(${rot} ${cx} ${cy})` });
+      const ring = el("ellipse", { class: "ansring", cx, cy, rx: rx + 5, ry: ry + 5 });
+      if (zooming) ring.style.strokeWidth = 1.2; // 放大 6 倍後看起來跟平常一樣粗
+      g.appendChild(ring);
+      svg.appendChild(g);
+      // 斜橢圓的上下半高，數字放在圈的正上方（太靠上就放下方）
+      const a = rot * Math.PI / 180, half = Math.hypot((rx + 5) * Math.sin(a), (ry + 5) * Math.cos(a));
+      const ty = cy - half - 8 < 24 ? cy + half + 26 : cy - half - 8;
+      if (!zooming) svg.appendChild(el("text", { class: "pct", x: cx, y: ty }, Math.round(got / n * 100) + "%"));
+    });
+    $("rAns").innerHTML = `這張有 <b class="big">${defects.length}</b> 個瑕疵<br>全班平均找到 <b>${(sum / n).toFixed(1)}</b> 個<small>圈圈上的數字＝找到那個瑕疵的人數比例</small>`;
+  }
+  $("btnDots").classList.toggle("on", dotsOn);
+  $("btnDots").textContent = dotsOn ? "隱藏大家點的位置" : "顯示大家點在哪裡";
+  $("btnAns").disabled = ansOn;
+  $("btnZoom").hidden = !(ansOn && CHIPS[rc].zoom);
+  $("btnZoom").textContent = ["放大看看", "再放大", "還原"][zoomStep];
+  applyZoom();
+}
+
+// 第 6 張：先把原圖放大到瑕疵的位置，再淡入特寫圖並圈出瑕疵
+function applyZoom() {
+  const c = CHIPS[rc], z = c.zoom;
+  $("zoomer").style.transformOrigin = z ? `${z.x / c.w * 100}% ${z.y / c.h * 100}%` : "50% 50%";
+  $("zoomer").style.transform = z && zoomStep >= 1
+    ? `translate(${(0.5 - z.x / c.w) * 100}%, ${(0.5 - z.y / c.h) * 100}%) scale(6)` : "none";
+  $("closeup").classList.toggle("show", !!z && zoomStep === 2);
+  const zl = $("zoomLayer");
+  zl.innerHTML = "";
+  if (z) {
+    if ($("zoomImg").getAttribute("src") !== z.img) $("zoomImg").src = z.img;
+    zl.setAttribute("viewBox", `0 0 ${z.w} ${z.h}`);
+    if (zoomStep === 2) zl.appendChild(el("circle", { class: "ansring", cx: z.spot.x, cy: z.spot.y, r: z.spot.r }));
+  }
+}
+
+$("btnDots").onclick = () => { dotsOn = !dotsOn; drawLayer(); };
+$("btnAns").onclick = () => { ansOn = true; drawLayer(); };
+$("btnZoom").onclick = () => { zoomStep = (zoomStep + 1) % 3; drawLayer(); };
+$("btnPrev").onclick = () => { if (rc > 0) openChip(rc - 1); };
+$("btnNext").onclick = () => { if (rc < CHIPS.length - 1) openChip(rc + 1); else showReport(); };
+
+// 空白鍵一步一步往下：顯示點擊 → 公布答案 →（第 6 張放大兩段）→ 下一張
+function step() {
+  if (!dotsOn) { dotsOn = true; drawLayer(); }
+  else if (!ansOn) { ansOn = true; drawLayer(); }
+  else if (CHIPS[rc].zoom && zoomStep < 2) { zoomStep++; drawLayer(); }
+  else $("btnNext").click();
+}
+addEventListener("keydown", e => {
+  if (view === "reveal") {
+    if (e.key === " " || e.key === "Enter" || e.key === "PageDown") { e.preventDefault(); step(); }
+    else if (e.key === "ArrowRight") $("btnNext").click();
+    else if (e.key === "ArrowLeft" || e.key === "PageUp") $("btnPrev").click();
+  } else if (view === "report" && (e.key === "ArrowLeft" || e.key === "PageUp")) openChip(CHIPS.length - 1);
+});
+
+// ── 全班報告 ──
+function showReport() {
+  show("report");
+  const ps = played(), n = ps.length || 1;
+  let allFound = 0, secSum = 0, secN = 0;
+  let html = `<span class="h"></span><span class="h">找到的瑕疵比例</span><span class="h num">看過的人平均看了</span><span class="h num">沒看過這張</span>`;
+  CHIPS.forEach((c, i) => {
+    const got = ps.reduce((s, p) => s + p.chips[i].hits.length, 0);
+    allFound += got;
+    const viewers = ps.filter(p => p.chips[i].seen >= 1000);
+    const avg = viewers.length ? viewers.reduce((s, p) => s + p.chips[i].seen, 0) / viewers.length / 1000 : 0;
+    secSum += viewers.reduce((s, p) => s + p.chips[i].seen, 0) / 1000; secN += viewers.length;
+    const pct = c.defects.length ? Math.round(got / (n * c.defects.length) * 100) : 0;
+    const wrongPeople = ps.filter(p => p.chips[i].taps.length).length;
+    html += `<span class="c">第 ${i + 1} 張</span>` + (c.defects.length
+      ? `<span class="barw"><i data-w="${pct}"></i><span>${pct}%</span></span>`
+      : `<span class="goodrow">好的晶片：${wrongPeople} 人把它當成壞的去點</span>`) + `
+      <span class="num">${avg ? avg.toFixed(1) : "—"} <small>秒</small></span>
+      <span class="num">${ps.length - viewers.length} <small>人</small></span>`;
+  });
+  $("rep").innerHTML = html;
+  requestAnimationFrame(() => document.querySelectorAll("#rep i").forEach(b => b.style.width = b.dataset.w + "%"));
+  $("totals").innerHTML = `
+    <div class="stat">全班平均找到 <b>${(allFound / n).toFixed(1)}</b> / ${TOTAL_DEFECTS} 個瑕疵</div>
+    <div class="stat">一張晶片平均看了 <b>${secN ? (secSum / secN).toFixed(1) : "—"}</b> 秒</div>
+    <div class="stat">參加人數 <b>${ps.length}</b> 人</div>`;
+}
+$("btnBack").onclick = () => openChip(CHIPS.length - 1);
+$("btnPodium").onclick = () => { showPodium(); show("end"); };
+
+openRoom().catch(e => {
+  console.error(e);
+  $("vBoot").innerHTML = `<p class="empty" style="text-align:center;margin-top:20vh">連不上伺服器。請確認有先執行 <b>python3 server.py</b>，再重新整理。</p>`;
+});
+</script>
+</body>
+</html>
