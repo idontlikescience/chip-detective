@@ -1,82 +1,106 @@
-// 6 張晶片電路圖與瑕疵位置。
-// 圖是同一張底圖做出來的（486 × 760，直式）。
-// 第 1–5 張的瑕疵位置是拿每張圖跟第 6 張逐點比對、找出不一樣的地方定出來的。
-// 第 6 張的瑕疵小到這張圖上看不到（要放大才看得到），老師公布答案時用放大圖揭曉。
-// 座標是原圖像素。每個瑕疵由一或多段「膠囊」組成：[x1, y1, x2, y2, 半徑]，兩端點相同就是圓。
-// 長條刮痕用線段沿著刮痕走，點在刮痕附近就算找到。半徑 24 在 iPad 上約等於手指寬。
+// 晶片懸案：題目資料。所有圖都是 486 × 760（直式），座標是原圖像素。
 
-export const CHIPS = [
-  { w: 486, h: 760, defects: [
-    [[274, 618, 485, 515, 20]],   // 右下的裂痕
-    [[149, 248, 149, 248, 60]],   // 左上的暗色污漬
+export const W = 486, H = 760;
+
+// 第 6 張（看起來正常，其實有一顆看不到的灰塵）：跟第一個遊戲同一張圖。
+// zoom 是灰塵在第 6 張上的位置；spot 是灰塵在特寫圖（closeup.png）上的位置。
+export const CHIP6 = { img: "img/standard.png", zoom: { x: 215, y: 277 }, closeup: "img/closeup.png",
+  closeupStd: "img/closeup-standard.png", spot: { x: 206, y: 410, r: 38 } };
+
+// 關卡二的 3 張新晶片：從第一個遊戲的瑕疵剪下來、貼到底圖其他位置組成的（瑕疵位置跟第一個遊戲不同）。
+// 每個瑕疵是一或多段膠囊 [x1, y1, x2, y2, 半徑]。
+export const CASE_CHIPS = [
+  { img: "img/case-A.png", defects: [
+    [[316, 205, 316, 205, 28]],
+    [[139, 569, 98, 580, 20]],
   ]},
-  { w: 486, h: 760, defects: [
-    [[34, 91, 251, 43, 20]],      // 上方很淡的長刮痕
-    [[133, 596, 400, 286, 20]],   // 中間的長刮痕
-    [[313, 729, 469, 578, 20]],   // 右下的刮痕
+  { img: "img/case-B.png", defects: [
+    [[252, 167, 40, 271, 20]],
+    [[384, 644, 384, 644, 24]],
+    [[166, 420, 166, 420, 24]],
   ]},
-  { w: 486, h: 760, defects: [
-    [[130, 205, 130, 205, 24]],   // 左上很淡的透明殘留
-    [[302, 516, 343, 505, 22]],   // 短刮痕
-    [[400, 331, 400, 331, 24]],   // 白色顆粒
-    [[62, 654, 62, 654, 24]],     // 左下小黑點
-    [[438, 118, 438, 118, 24]],   // 右上小黑點
+  { img: "img/case-C.png", defects: [
+    [[189, 432, 33, 583, 20]],
+    [[336, 256, 336, 256, 24]],
+    [[240, 90, 240, 90, 24]],
   ]},
-  { w: 486, h: 760, defects: [
-    [[117, 137, 117, 137, 30]],   // 灰塵（大）
-    [[371, 452, 371, 452, 24]],   // 灰塵（中）
-    [[232, 646, 232, 646, 24]],   // 灰塵（小）
-  ]},
-  { w: 486, h: 760, defects: [
-    [[338, 656, 338, 656, 24]],   // 兩條線黏在一起
-    [[259, 81, 259, 81, 24]],
-    [[182, 592, 182, 592, 24]],
-  ]},
-  // 第 6 張：放大圖（img/chip6-zoom.png）是另外畫的特寫，不是從這張裁出來的，
-  // 所以位置是挑一個跟特寫結構相同的地方：直線上、緊貼條紋帶上方。
-  // 點擊範圍刻意不放寬，免得有人亂點剛好點中。
-  { w: 486, h: 760,
-    zoom: { x: 215, y: 277, img: "img/chip6-zoom.png", w: 486, h: 760, spot: { x: 206, y: 410, r: 38 } },
-    defects: [
-      [[215, 277, 215, 277, 12]],  // 小到看不到的灰塵
-    ]},
 ];
+export const STANDARD = "img/standard.png";
 
-export const TOTAL_DEFECTS = CHIPS.reduce((n, c) => n + c.defects.length, 0); // 17
+export const FACTORY_PER_HOUR = 30000;   // 原簡報 p.20、p.29：工廠每小時檢查 3～4.5 萬顆
+export const PHOTOS_PER_CHIP = 400;      // 遊戲設定：放大後一顆晶片要拍 400 張（20 × 20 格）
 
-export const PTS_RIGHT = 100;
-export const PTS_WRONG = 30;
-export const DEFAULT_SECONDS = 50;
+// 第一個遊戲每張晶片的瑕疵數（要跟 chip-inspector/data.js 一致）
+export const GAME1_DEFECTS = [2, 3, 5, 3, 3, 1];
 
-// 點 (x, y) 落在第幾個瑕疵裡，沒有就回 -1
-export function hitTest(chip, x, y) {
-  const defs = CHIPS[chip].defects;
-  for (let d = 0; d < defs.length; d++) {
-    for (const [x1, y1, x2, y2, r] of defs[d]) {
-      if (distToSeg(x, y, x1, y1, x2, y2) <= r) return d;
+// 沒有第一個遊戲的資料時，用這組範例數據
+export const SAMPLE_EVIDENCE = { source: "sample", n: 25, chip6Found: 0, notFinished: 14,
+  notSeen: "0,1,3,6,11,14", avgSec: 9.6, seconds: 50 };
+
+// 從第一個遊戲的房間資料（rooms/{代碼}）算出證物要用的數字
+export function evidenceFromRoom(code, room) {
+  const arr = v => v == null ? [] : Array.isArray(v) ? v.filter(x => x != null) : Object.values(v);
+  const ps = Object.values(room.players || {}).filter(p => p.t > 0).map(p => {
+    const chips = p.chips || {};
+    return GAME1_DEFECTS.map((_, i) => ({ seen: (chips[i] || {}).seen || 0, hits: arr((chips[i] || {}).hits) }));
+  });
+  const n = ps.length;
+  if (!n) return null;
+  const notSeen = GAME1_DEFECTS.map((_, i) => ps.filter(c => c[i].seen < 1000).length);
+  let secSum = 0, views = 0;
+  for (const c of ps) for (const x of c) if (x.seen >= 1000) { secSum += x.seen / 1000; views++; }
+  return {
+    source: code, n,
+    chip6Found: ps.filter(c => c[5].hits.length).length,
+    notFinished: ps.filter(c => c.some(x => x.seen < 1000)).length,
+    notSeen: notSeen.join(","),
+    avgSec: views ? Math.round(secSum / views * 10) / 10 : 0,
+    seconds: (room.meta && room.meta.seconds) || 50,
+  };
+}
+
+export function hitTest(defects, x, y) {
+  for (let d = 0; d < defects.length; d++) {
+    for (const [x1, y1, x2, y2, r] of defects[d]) {
+      const dx = x2 - x1, dy = y2 - y1, len2 = dx * dx + dy * dy;
+      const t = len2 ? Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / len2)) : 0;
+      if (Math.hypot(x - (x1 + t * dx), y - (y1 + t * dy)) <= r) return d;
     }
   }
   return -1;
 }
 
-function distToSeg(px, py, x1, y1, x2, y2) {
-  const dx = x2 - x1, dy = y2 - y1, len2 = dx * dx + dy * dy;
-  const t = len2 ? Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / len2)) : 0;
-  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
-}
-
-// 畫答案圈用：瑕疵的中心、半徑與旋轉角度（單段的刮痕沿著刮痕方向畫斜的橢圓）
 export function defectCircle(segs) {
   if (segs.length === 1) {
     const [ax, ay, bx, by, r] = segs[0];
-    const len = Math.hypot(bx - ax, by - ay);
-    return { cx: (ax + bx) / 2, cy: (ay + by) / 2, rx: len / 2 + r, ry: r, rot: Math.atan2(by - ay, bx - ax) * 180 / Math.PI };
+    return { cx: (ax + bx) / 2, cy: (ay + by) / 2, rx: Math.hypot(bx - ax, by - ay) / 2 + r, ry: r,
+      rot: Math.atan2(by - ay, bx - ax) * 180 / Math.PI };
   }
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (const [ax, ay, bx, by] of segs) {
-    x0 = Math.min(x0, ax, bx); y0 = Math.min(y0, ay, by);
-    x1 = Math.max(x1, ax, bx); y1 = Math.max(y1, ay, by);
-  }
+  for (const [ax, ay, bx, by] of segs) { x0 = Math.min(x0, ax, bx); y0 = Math.min(y0, ay, by); x1 = Math.max(x1, ax, bx); y1 = Math.max(y1, ay, by); }
   const r = Math.max(...segs.map(s => s[4]));
   return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, rx: (x1 - x0) / 2 + r, ry: (y1 - y0) / 2 + r, rot: 0 };
 }
+
+// ── 各關的文字 ──
+export const STAGES = ["案件", "線索一", "線索二", "線索三", "結案"];
+
+export const CAUSES = [
+  { id: "small", text: "瑕疵太小，眼睛看不到" },
+  { id: "many", text: "晶片太多，人看太慢又會累" },
+  { id: "light", text: "檢測的時候燈光太暗" },
+  { id: "lazy", text: "大家不夠認真" },
+];
+
+export const HINTS = [
+  ["先點開每一份證物讀一讀，想想它在說「看不到」還是「看不完」。",
+   "第 6 張大家都看了卻沒人找到；後面幾張則是很多人根本沒看到。這是兩種不同的原因。"],
+  ["想想看，你用手機拍到很小的字之後，會怎麼做？",
+   "哪一個工具能讓看不到的東西變得看得到，還能把畫面留下來？"],
+  ["玩「大家來找碴」的時候，有原圖跟沒原圖，差在哪裡？",
+   "晶片的電路是做的時候隨便長出來的，還是事先設計好的？比對時可以按住「閃一下」。"],
+  ["電腦要找出不一樣的地方，至少需要哪兩張圖？",
+   "電腦能比對的，只有照片裡拍得到的東西。第 6 張的灰塵，要用什麼照片才拍得到？"],
+  ["每一步都需要前一步給它東西：電腦要比對，得先有什麼？",
+   "瑕疵如果被下一層蓋住就修不好了。要在什麼時候檢查？"],
+];
